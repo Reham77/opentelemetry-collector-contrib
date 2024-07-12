@@ -178,6 +178,7 @@ const (
 	TypeContainerEFA    = "ContainerEFA"
 	TypePodEFA          = "PodEFA"
 	TypeNodeEFA         = "NodeEFA"
+	TypeHyperPodNode    = "HyperPodNode"
 
 	// unit
 	UnitBytes       = "Bytes"

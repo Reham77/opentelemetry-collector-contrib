@@ -32,6 +32,24 @@ const (
 	kubeProxy          = "kube-proxy"
 )
 
+type HyperPodConditionType string
+
+const (
+	UnschedulablePendingReplacement HyperPodConditionType = "UnschedulablePendingReplacement"
+	Schedulable                     HyperPodConditionType = "Schedulable"
+	SchedulablePreferred            HyperPodConditionType = "SchedulablePreferred"
+	UnschedulablePendingReboot      HyperPodConditionType = "UnschedulablePendingReboot"
+	Unschedulable                   HyperPodConditionType = "Unschedulable"
+)
+
+var conditionToMetricName = map[HyperPodConditionType]string{
+	UnschedulablePendingReplacement: "unschedulable_pending_replacement",
+	UnschedulablePendingReboot:      "unschedulable_pending_reboot",
+	Schedulable:                     "schedulable",
+	SchedulablePreferred:            "schedulable_preferred",
+	Unschedulable:                   "unschedulable",
+}
+
 var (
 	re = regexp.MustCompile(splitRegexStr)
 
@@ -379,6 +397,29 @@ func (p *PodStore) decorateNode(metric CIMetric) {
 		}
 		if nodeStatusConditionUnknown, ok := p.nodeInfo.getNodeConditionUnknown(); ok {
 			metric.AddField(ci.MetricName(ci.TypeNode, ci.StatusConditionUnknown), nodeStatusConditionUnknown)
+		}
+
+		if p.nodeInfo.isHyperPodNode() {
+			if hyperPodLabelUnknown, ok := p.nodeInfo.getLabelValueUnknown(k8sclient.SageMakerNodeHealthStatus); ok {
+				metric.AddField(ci.MetricName(ci.TypeHyperPodNode, ci.StatusConditionUnknown), hyperPodLabelUnknown)
+			}
+
+			isUnschedulable := 0
+			for _, condition := range []HyperPodConditionType{
+				UnschedulablePendingReplacement,
+				UnschedulablePendingReboot,
+				Schedulable,
+				SchedulablePreferred,
+			} {
+				if status, ok := p.nodeInfo.getLabelValue(condition, k8sclient.SageMakerNodeHealthStatus); ok {
+					metric.AddField(ci.MetricName(ci.TypeHyperPodNode, conditionToMetricName[condition]), status)
+
+					if status == 1 && (condition == UnschedulablePendingReplacement || condition == UnschedulablePendingReboot) {
+						isUnschedulable = 1
+					}
+				}
+			}
+			metric.AddField(ci.MetricName(ci.TypeHyperPodNode, conditionToMetricName[Unschedulable]), isUnschedulable)
 		}
 	}
 }
