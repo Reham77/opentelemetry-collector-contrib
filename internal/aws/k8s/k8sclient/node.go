@@ -6,6 +6,7 @@ package k8sclient // import "github.com/open-telemetry/opentelemetry-collector-c
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 
 	"go.uber.org/zap"
@@ -164,6 +165,8 @@ func (c *nodeClient) NodeToLabelsMap() map[string]map[Label]string {
 }
 
 func (c *nodeClient) refresh() {
+	log.Println("OKAY REFRESHED")
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -192,8 +195,13 @@ func (c *nodeClient) refresh() {
 
 			labelsMap := make(map[Label]string)
 			if HyperPodLabel, ok := node.HyperPodLabels[SageMakerNodeHealthStatus]; ok {
+				log.Println("Label exists")
+				log.Println(HyperPodLabel)
 				labelsMap[SageMakerNodeHealthStatus] = HyperPodLabel
+			} else {
+				log.Println("Label doesn't exist")
 			}
+
 			nodeToLabelsMap[node.Name] = labelsMap
 		}
 		clusterNodeCountNew++
