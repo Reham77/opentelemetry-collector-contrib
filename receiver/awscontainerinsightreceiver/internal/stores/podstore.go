@@ -400,6 +400,7 @@ func (p *PodStore) decorateNode(metric CIMetric) {
 		}
 
 		if p.nodeInfo.isHyperPodNode() {
+			log.Println("This is a hyperpodo node")
 			if hyperPodLabelUnknown, ok := p.nodeInfo.getLabelValueUnknown(k8sclient.SageMakerNodeHealthStatus); ok {
 				metric.AddField(ci.MetricName(ci.TypeHyperPodNode, ci.StatusConditionUnknown), hyperPodLabelUnknown)
 			}
@@ -420,6 +421,8 @@ func (p *PodStore) decorateNode(metric CIMetric) {
 				}
 			}
 			metric.AddField(ci.MetricName(ci.TypeHyperPodNode, conditionToMetricName[Unschedulable]), isUnschedulable)
+		} else {
+			log.Println("This is not a hyperpod node")
 		}
 	}
 }

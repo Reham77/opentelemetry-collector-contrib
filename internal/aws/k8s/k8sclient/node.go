@@ -165,7 +165,6 @@ func (c *nodeClient) NodeToLabelsMap() map[string]map[Label]string {
 }
 
 func (c *nodeClient) refresh() {
-	log.Println("OKAY REFRESHED")
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -185,6 +184,7 @@ func (c *nodeClient) refresh() {
 		nodeInfos[node.Name] = node
 
 		if c.captureNodeLevelInfo {
+			log.Println("Start refresh for node")
 			nodeToCapacityMap[node.Name] = node.Capacity
 			nodeToAllocatableMap[node.Name] = node.Allocatable
 			conditionsMap := make(map[v1.NodeConditionType]v1.ConditionStatus)
