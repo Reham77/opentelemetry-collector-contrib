@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	refreshInterval    = 30 * time.Second
+	refreshInterval    = 10 * time.Second
 	measurementsExpiry = 10 * time.Minute
 	podsExpiry         = 2 * time.Minute
 	memoryKey          = "memory"
@@ -31,24 +31,6 @@ const (
 	splitRegexStr      = "\\.|-"
 	kubeProxy          = "kube-proxy"
 )
-
-type HyperPodConditionType string
-
-const (
-	UnschedulablePendingReplacement HyperPodConditionType = "UnschedulablePendingReplacement"
-	Schedulable                     HyperPodConditionType = "Schedulable"
-	SchedulablePreferred            HyperPodConditionType = "SchedulablePreferred"
-	UnschedulablePendingReboot      HyperPodConditionType = "UnschedulablePendingReboot"
-	Unschedulable                   HyperPodConditionType = "Unschedulable"
-)
-
-var conditionToMetricName = map[HyperPodConditionType]string{
-	UnschedulablePendingReplacement: "unschedulable_pending_replacement",
-	UnschedulablePendingReboot:      "unschedulable_pending_reboot",
-	Schedulable:                     "schedulable",
-	SchedulablePreferred:            "schedulable_preferred",
-	Unschedulable:                   "unschedulable",
-}
 
 var (
 	re = regexp.MustCompile(splitRegexStr)
@@ -406,21 +388,21 @@ func (p *PodStore) decorateNode(metric CIMetric) {
 			}
 
 			isUnschedulable := 0
-			for _, condition := range []HyperPodConditionType{
-				UnschedulablePendingReplacement,
-				UnschedulablePendingReboot,
-				Schedulable,
-				SchedulablePreferred,
+			for _, condition := range []ci.HyperPodConditionType{
+				ci.UnschedulablePendingReplacement,
+				ci.UnschedulablePendingReboot,
+				ci.Schedulable,
+				ci.SchedulablePreferred,
 			} {
 				if status, ok := p.nodeInfo.getLabelValue(condition, k8sclient.SageMakerNodeHealthStatus); ok {
-					metric.AddField(ci.MetricName(ci.TypeHyperPodNode, conditionToMetricName[condition]), status)
+					metric.AddField(ci.MetricName(ci.TypeHyperPodNode, ci.ConditionToMetricName[condition]), status)
 
-					if status == 1 && (condition == UnschedulablePendingReplacement || condition == UnschedulablePendingReboot) {
+					if status == 1 && (condition == ci.UnschedulablePendingReplacement || condition == ci.UnschedulablePendingReboot) {
 						isUnschedulable = 1
 					}
 				}
 			}
-			metric.AddField(ci.MetricName(ci.TypeHyperPodNode, conditionToMetricName[Unschedulable]), isUnschedulable)
+			metric.AddField(ci.MetricName(ci.TypeHyperPodNode, ci.ConditionToMetricName[ci.Unschedulable]), isUnschedulable)
 		} else {
 			log.Println("This is not a hyperpod node")
 		}

@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 	v1 "k8s.io/api/core/v1"
 
+	ci "github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/containerinsight"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/k8s/k8sclient"
 )
 
@@ -173,24 +174,24 @@ func TestGetLabelValue(t *testing.T) {
 	nodeInfo := newNodeInfo("hyperpod-testNode1", &mockNodeInfoProvider{}, zap.NewNop())
 	assert.True(t, nodeInfo.isHyperPodNode())
 
-	nodeStatusCondition, valid := nodeInfo.getLabelValue(UnschedulablePendingReplacement, k8sclient.SageMakerNodeHealthStatus)
+	nodeStatusCondition, valid := nodeInfo.getLabelValue(ci.UnschedulablePendingReplacement, k8sclient.SageMakerNodeHealthStatus)
 	assert.True(t, valid)
 	assert.Equal(t, uint64(0), nodeStatusCondition)
 
-	nodeStatusCondition, valid = nodeInfo.getLabelValue(Schedulable, k8sclient.SageMakerNodeHealthStatus)
+	nodeStatusCondition, valid = nodeInfo.getLabelValue(ci.Schedulable, k8sclient.SageMakerNodeHealthStatus)
 	assert.True(t, valid)
 	assert.Equal(t, uint64(1), nodeStatusCondition)
 
-	nodeStatusCondition, valid = nodeInfo.getLabelValue(SchedulablePreferred, k8sclient.SageMakerNodeHealthStatus)
+	nodeStatusCondition, valid = nodeInfo.getLabelValue(ci.SchedulablePreferred, k8sclient.SageMakerNodeHealthStatus)
 	assert.True(t, valid)
 	assert.Equal(t, uint64(0), nodeStatusCondition)
 
-	nodeStatusCondition, valid = nodeInfo.getLabelValue(UnschedulablePendingReboot, k8sclient.SageMakerNodeHealthStatus)
+	nodeStatusCondition, valid = nodeInfo.getLabelValue(ci.UnschedulablePendingReboot, k8sclient.SageMakerNodeHealthStatus)
 	assert.True(t, valid)
 	assert.Equal(t, uint64(0), nodeStatusCondition)
 
 	const TestingLabel k8sclient.Label = "TestingLabel"
-	nodeStatusCondition, valid = nodeInfo.getLabelValue(UnschedulablePendingReboot, TestingLabel)
+	nodeStatusCondition, valid = nodeInfo.getLabelValue(ci.UnschedulablePendingReboot, TestingLabel)
 	assert.False(t, valid)
 	assert.Equal(t, uint64(0), nodeStatusCondition)
 }

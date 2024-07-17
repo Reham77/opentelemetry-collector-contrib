@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 	v1 "k8s.io/api/core/v1"
 
+	ci "github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/containerinsight"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/k8s/k8sclient"
 )
 
@@ -133,7 +134,7 @@ func (n *nodeInfo) getNodeConditionUnknown() (uint64, bool) {
 	return 0, false
 }
 
-func (n *nodeInfo) getLabelValue(conditionType HyperPodConditionType, labelKey k8sclient.Label) (uint64, bool) {
+func (n *nodeInfo) getLabelValue(conditionType ci.HyperPodConditionType, labelKey k8sclient.Label) (uint64, bool) {
 	if nodeLabels, nodeExists := n.provider.NodeToLabelsMap()[n.nodeName]; nodeExists {
 		if nodeConditions, labelExists := nodeLabels[labelKey]; labelExists {
 			if nodeConditions == string(conditionType) {

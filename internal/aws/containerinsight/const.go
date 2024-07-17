@@ -202,6 +202,24 @@ var WaitingReasonLookup = map[string]string{
 	"StartError":                 StatusContainerWaitingReasonStartError,
 }
 
+type HyperPodConditionType string
+
+const (
+	UnschedulablePendingReplacement HyperPodConditionType = "UnschedulablePendingReplacement"
+	Schedulable                     HyperPodConditionType = "Schedulable"
+	SchedulablePreferred            HyperPodConditionType = "SchedulablePreferred"
+	UnschedulablePendingReboot      HyperPodConditionType = "UnschedulablePendingReboot"
+	Unschedulable                   HyperPodConditionType = "Unschedulable"
+)
+
+var ConditionToMetricName = map[HyperPodConditionType]string{
+	UnschedulablePendingReplacement: "unschedulable_pending_replacement",
+	UnschedulablePendingReboot:      "unschedulable_pending_reboot",
+	Schedulable:                     "schedulable",
+	SchedulablePreferred:            "schedulable_preferred",
+	Unschedulable:                   "unschedulable",
+}
+
 var metricToUnitMap map[string]string
 
 func init() {
