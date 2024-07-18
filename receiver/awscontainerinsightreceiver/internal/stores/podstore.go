@@ -380,6 +380,29 @@ func (p *PodStore) decorateNode(metric CIMetric) {
 		if nodeStatusConditionUnknown, ok := p.nodeInfo.getNodeConditionUnknown(); ok {
 			metric.AddField(ci.MetricName(ci.TypeNode, ci.StatusConditionUnknown), nodeStatusConditionUnknown)
 		}
+
+		if p.nodeInfo.isHyperPodNode() {
+			if hyperPodLabelUnknown, ok := p.nodeInfo.getLabelValueUnknown(k8sclient.SageMakerNodeHealthStatus); ok {
+				metric.AddField(ci.MetricName(ci.TypeHyperPodNode, ci.StatusConditionUnknown), hyperPodLabelUnknown)
+			}
+
+			isUnschedulable := 0
+			for _, condition := range []ci.HyperPodConditionType{
+				ci.UnschedulablePendingReplacement,
+				ci.UnschedulablePendingReboot,
+				ci.Schedulable,
+				ci.SchedulablePreferred,
+			} {
+				if status, ok := p.nodeInfo.getLabelValue(condition, k8sclient.SageMakerNodeHealthStatus); ok {
+					metric.AddField(ci.MetricName(ci.TypeHyperPodNode, ci.ConditionToMetricName[condition]), status)
+
+					if status == 1 && (condition == ci.UnschedulablePendingReplacement || condition == ci.UnschedulablePendingReboot) {
+						isUnschedulable = 1
+					}
+				}
+			}
+			metric.AddField(ci.MetricName(ci.TypeHyperPodNode, ci.ConditionToMetricName[ci.Unschedulable]), isUnschedulable)
+		}
 	}
 }
 
