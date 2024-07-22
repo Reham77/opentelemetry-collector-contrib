@@ -6,6 +6,7 @@ package k8sclient // import "github.com/open-telemetry/opentelemetry-collector-c
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 
 	"go.uber.org/zap"
@@ -183,6 +184,7 @@ func (c *nodeClient) refresh() {
 		nodeInfos[node.Name] = node
 
 		if c.captureNodeLevelInfo {
+			log.Printf("Refresh Node")
 			nodeToCapacityMap[node.Name] = node.Capacity
 			nodeToAllocatableMap[node.Name] = node.Allocatable
 			conditionsMap := make(map[v1.NodeConditionType]v1.ConditionStatus)
