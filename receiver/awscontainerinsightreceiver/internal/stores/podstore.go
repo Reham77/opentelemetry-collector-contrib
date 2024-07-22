@@ -160,6 +160,9 @@ func NewPodStore(client podClient, prefFullPodName bool, addFullPodNameMetricLab
 }
 
 func (p *PodStore) Shutdown() error {
+	var nodeMetric = NewCIMetric(ci.TypeNode, p.logger)
+	p.decorateNode(nodeMetric)
+
 	var errs error
 	errs = p.cache.Shutdown()
 	p.prevMeasurements.Range(
