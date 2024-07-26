@@ -31,3 +31,39 @@ func ParseInstanceIdFromProviderId(providerId string) string {
 	}
 	return providerId[strings.LastIndex(providerId, "/")+1:]
 }
+
+type HyperPodConditionType int8
+
+const (
+	Schedulable                     HyperPodConditionType = iota
+	SchedulablePreferred            HyperPodConditionType = iota
+	UnschedulablePendingReplacement HyperPodConditionType = iota
+	UnschedulablePendingReboot      HyperPodConditionType = iota
+	Unschedulable                   HyperPodConditionType = iota
+	Unknown                   		HyperPodConditionType = iota
+)
+
+// String - Creating common behavior - give the type a String function
+func (ct HyperPodConditionType) String() string {
+	return [...]string{"Schedulable", "SchedulablePreferred", "UnschedulablePendingReplacement", "UnschedulablePendingReboot", "Unschedulable", "Unknown"}[ct]
+}
+
+// EnumIndex - Creating common behavior - give the type a EnumIndex function
+func (ct HyperPodConditionType) EnumIndex() int {
+	return int(ct)
+}
+
+var (
+    HyperPodConditionTypeMap = map[string]HyperPodConditionType{
+        "Schedulable":   Schedulable,
+        "SchedulablePreferred": SchedulablePreferred,
+        "UnschedulablePendingReplacement": UnschedulablePendingReplacement,
+        "UnschedulablePendingReboot": UnschedulablePendingReboot,
+        "Unschedulable":   Unschedulable,
+    }
+)
+
+func ParseString(str string) (HyperPodConditionType, bool) {
+    c, ok := HyperPodConditionTypeMap[str]
+    return c, ok
+}

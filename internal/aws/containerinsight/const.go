@@ -150,6 +150,7 @@ const (
 	SchedulableMetric                     = "schedulable"
 	SchedulablePreferredMetric            = "schedulable_preferred"
 	UnschedulableMetric                   = "unschedulable"
+	Unknown                   			  = "unknown"
 
 	// Define the metric types
 	TypeCluster            = "Cluster"
@@ -208,22 +209,14 @@ var WaitingReasonLookup = map[string]string{
 	"StartError":                 StatusContainerWaitingReasonStartError,
 }
 
-type HyperPodConditionType string
 
-const (
-	UnschedulablePendingReplacement HyperPodConditionType = "UnschedulablePendingReplacement"
-	Schedulable                     HyperPodConditionType = "Schedulable"
-	SchedulablePreferred            HyperPodConditionType = "SchedulablePreferred"
-	UnschedulablePendingReboot      HyperPodConditionType = "UnschedulablePendingReboot"
-	Unschedulable                   HyperPodConditionType = "Unschedulable"
-)
-
-var ConditionToMetricName = map[HyperPodConditionType]string{
-	UnschedulablePendingReplacement: UnschedulablePendingReplacementMetric,
-	UnschedulablePendingReboot:      UnschedulablePendingRebootMetric,
-	Schedulable:                     SchedulableMetric,
-	SchedulablePreferred:            SchedulablePreferredMetric,
-	Unschedulable:                   UnschedulableMetric,
+var ConditionToMetricName = map[string]string{
+	"UnschedulablePendingReplacement": UnschedulablePendingReplacementMetric,
+	"UnschedulablePendingReboot":      UnschedulablePendingRebootMetric,
+	"Schedulable":                     SchedulableMetric,
+	"SchedulablePreferred":            SchedulablePreferredMetric,
+	"Unschedulable":                   UnschedulableMetric,
+	"Unknown":                   	   Unknown,
 }
 
 var metricToUnitMap map[string]string

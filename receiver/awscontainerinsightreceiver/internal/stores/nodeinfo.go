@@ -5,14 +5,13 @@ package stores // import "github.com/open-telemetry/opentelemetry-collector-cont
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 
 	"go.uber.org/zap"
 	v1 "k8s.io/api/core/v1"
 
-	ci "github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/containerinsight"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/k8s/k8sclient"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/k8s/k8sutil"
 )
 
 const HyperPodPrefix = "hyperpod-"
@@ -44,7 +43,7 @@ type nodeInfoProvider interface {
 	NodeToCapacityMap() map[string]v1.ResourceList
 	NodeToAllocatableMap() map[string]v1.ResourceList
 	NodeToConditionsMap() map[string]map[v1.NodeConditionType]v1.ConditionStatus
-	NodeToLabelsMap() map[string]map[k8sclient.Label]string
+	NodeToLabelsMap() map[string]map[k8sclient.Label]k8sutil.HyperPodConditionType
 }
 
 func newNodeInfo(nodeName string, provider nodeInfoProvider, logger *zap.Logger) *nodeInfo {
@@ -134,31 +133,6 @@ func (n *nodeInfo) getNodeConditionUnknown() (uint64, bool) {
 	return 0, false
 }
 
-func (n *nodeInfo) getLabelValue(conditionType ci.HyperPodConditionType, labelKey k8sclient.Label) (uint64, bool) {
-	if nodeLabels, nodeExists := n.provider.NodeToLabelsMap()[n.nodeName]; nodeExists {
-		if nodeConditions, labelExists := nodeLabels[labelKey]; labelExists {
-			if nodeConditions == string(conditionType) {
-				return 1, true
-			}
-			return 0, true
-		}
-	}
-	return 0, false
-}
-
-func (n *nodeInfo) getLabelValueUnknown(labelKey k8sclient.Label) (uint64, bool) {
-	if nodeLabels, nodeExists := n.provider.NodeToLabelsMap()[n.nodeName]; nodeExists {
-		if _, labelExists := nodeLabels[labelKey]; labelExists {
-			return 0, true
-		}
-		return 1, true
-	}
-	return 0, false
-}
-
-func (n *nodeInfo) isHyperPodNode() bool {
-	return strings.HasPrefix(n.nodeName, HyperPodPrefix)
-}
 
 func forceConvertToInt64(v any, logger *zap.Logger) uint64 {
 	var value uint64

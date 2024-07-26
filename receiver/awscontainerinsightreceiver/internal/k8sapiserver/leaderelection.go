@@ -66,7 +66,7 @@ func WithLeaderLockUsingConfigMapOnly(leaderLockUsingConfigMapOnly bool) LeaderE
 func NewLeaderElection(logger *zap.Logger, options ...LeaderElectionOption) (*LeaderElection, error) {
 	le := &LeaderElection{
 		logger:      logger,
-		k8sClient:   k8sclient.Get(logger),
+		k8sClient:   k8sclient.Get(logger, k8sclient.CaptureOnlyNodeLabelsInfo(true),),
 		broadcaster: record.NewBroadcaster(),
 	}
 

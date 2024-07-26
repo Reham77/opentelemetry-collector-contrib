@@ -5,12 +5,14 @@ package k8sclient // import "github.com/open-telemetry/opentelemetry-collector-c
 
 import (
 	v1 "k8s.io/api/core/v1"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/k8s/k8sutil"
 )
 
 type Label string
 
 const (
 	SageMakerNodeHealthStatus Label = "sagemaker.amazonaws.com/node-health-status"
+	SageMakerNodeHealthStatusSC Label = "n"
 )
 
 type NodeInfo struct {
@@ -20,7 +22,7 @@ type NodeInfo struct {
 	Allocatable    v1.ResourceList
 	ProviderId     string
 	InstanceType   string
-	HyperPodLabels map[Label]string
+	HyperPodLabels map[Label]k8sutil.HyperPodConditionType
 }
 
 type NodeCondition struct {

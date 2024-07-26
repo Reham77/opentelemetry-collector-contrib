@@ -5,7 +5,6 @@ package k8sclient // import "github.com/open-telemetry/opentelemetry-collector-c
 
 import (
 	"fmt"
-	"log"
 	"sync"
 
 	"go.uber.org/zap"
@@ -75,7 +74,6 @@ func (s *ObjStore) Add(obj any) error {
 // Update implements the Update method of the store interface.
 // Update updates the existing entry in the ObjStore.
 func (s *ObjStore) Update(obj any) error {
-	log.Printf("Update Here")
 	return s.Add(obj)
 }
 
