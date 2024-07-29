@@ -540,6 +540,7 @@ func (k *K8sAPIServer) getAcceleratorCountMetrics(clusterName, timestampNs strin
 
 func (k *K8sAPIServer) getHyperPodResiliencyMetrics(clusterName, timestampNs string) []pmetric.Metrics {
 	var metrics []pmetric.Metrics
+	k.logger.Info("NodeToLabelsMap is ", zap.Any("Map", k.leaderElection.nodeClient.NodeToLabelsMap()))
 	for nodeName, labels := range k.leaderElection.nodeClient.NodeToLabelsMap() {
 		if k.isHyperPodNode(nodeName) {
 			fields := map[string]any{}

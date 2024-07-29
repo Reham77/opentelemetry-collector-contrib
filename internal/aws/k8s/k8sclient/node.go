@@ -203,8 +203,8 @@ func (c *nodeClient) refresh() {
 			labelsMap := make(map[Label]k8sutil.HyperPodConditionType)
 			if HyperPodLabel, ok := node.HyperPodLabels[SageMakerNodeHealthStatusSC]; ok {
 				labelsMap[SageMakerNodeHealthStatusSC] = HyperPodLabel
+				nodeToLabelsMap[node.Name] = labelsMap
 			}
-			nodeToLabelsMap[node.Name] = labelsMap
 		}
 		clusterNodeCountNew++
 
