@@ -41,6 +41,7 @@ type SimplePrometheusScraperOpts struct {
 type HostInfoProvider interface {
 	GetClusterName() string
 	GetInstanceID() string
+	GetInstanceType() string
 }
 
 func NewSimplePrometheusScraper(opts SimplePrometheusScraperOpts) (*SimplePrometheusScraper, error) {
@@ -60,7 +61,7 @@ func NewSimplePrometheusScraper(opts SimplePrometheusScraperOpts) (*SimplePromet
 		},
 	}
 
-	params := receiver.CreateSettings{
+	params := receiver.Settings{
 		ID:                component.MustNewID(opts.ScraperConfigs.JobName),
 		TelemetrySettings: opts.TelemetrySettings,
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/processor/processortest"
 	conventions "go.opentelemetry.io/collector/semconv/v1.6.1"
 	"go.uber.org/zap"
@@ -42,9 +43,14 @@ func (detectorUtils *MockDetectorUtils) getClusterNameTagFromReservations(_ []*e
 
 func TestNewDetector(t *testing.T) {
 	dcfg := CreateDefaultConfig()
-	detector, err := NewDetector(processortest.NewNopCreateSettings(), dcfg)
+	detector, err := NewDetector(processortest.NewNopSettings(), dcfg)
 	assert.NoError(t, err)
 	assert.NotNil(t, detector)
+	// no-op
+	gotResource, gotSchema, gotErr := detector.Detect(context.Background())
+	assert.NoError(t, gotErr)
+	assert.Equal(t, pcommon.NewResource(), gotResource)
+	assert.Empty(t, gotSchema)
 }
 
 // Tests EKS resource detector running in EKS environment
@@ -55,7 +61,7 @@ func TestEKS(t *testing.T) {
 	t.Setenv("KUBERNETES_SERVICE_HOST", "localhost")
 	detectorUtils.On("getConfigMap", authConfigmapNS, authConfigmapName).Return(map[string]string{conventions.AttributeK8SClusterName: clusterName}, nil)
 	// Call EKS Resource detector to detect resources
-	eksResourceDetector := &detector{utils: detectorUtils, err: nil, ra: metadata.DefaultResourceAttributesConfig(), rb: metadata.NewResourceBuilder(metadata.DefaultResourceAttributesConfig())}
+	eksResourceDetector := &detector{utils: detectorUtils, ra: metadata.DefaultResourceAttributesConfig(), rb: metadata.NewResourceBuilder(metadata.DefaultResourceAttributesConfig())}
 	res, _, err := eksResourceDetector.Detect(ctx)
 	require.NoError(t, err)
 

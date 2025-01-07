@@ -68,24 +68,17 @@ func GetNeuronMetricRelabelConfigs(hostinfo prometheusscraper.HostInfoProvider) 
 			Action:       relabel.Keep,
 		},
 		{
-			SourceLabels: model.LabelNames{"instance_id"},
-			TargetLabel:  ci.InstanceID,
-			Regex:        relabel.MustNewRegexp("(.*)"),
-			Replacement:  "${1}",
-			Action:       relabel.Replace,
-		},
-		{
-			SourceLabels: model.LabelNames{"instance_type"},
-			TargetLabel:  ci.InstanceType,
-			Regex:        relabel.MustNewRegexp("(.*)"),
-			Replacement:  "${1}",
-			Action:       relabel.Replace,
-		},
-		{
 			SourceLabels: model.LabelNames{"neuroncore"},
 			TargetLabel:  "NeuronCore",
 			Regex:        relabel.MustNewRegexp("(.*)"),
 			Replacement:  "${1}",
+			Action:       relabel.Replace,
+		},
+		{
+			SourceLabels: model.LabelNames{"instance_id"},
+			TargetLabel:  ci.NodeNameKey,
+			Regex:        relabel.MustNewRegexp("(.*)"),
+			Replacement:  os.Getenv("HOST_NAME"),
 			Action:       relabel.Replace,
 		},
 		{
@@ -96,7 +89,7 @@ func GetNeuronMetricRelabelConfigs(hostinfo prometheusscraper.HostInfoProvider) 
 			Action:       relabel.Replace,
 		},
 		// hacky way to inject static values (clusterName) to label set without additional processor
-		// relabel looks up an existing label then creates another label with given key (TargetLabel) and value (static)
+		// could be removed since these labels are now set by localNode decorator
 		{
 			SourceLabels: model.LabelNames{"instance_id"},
 			TargetLabel:  ci.ClusterNameKey,
@@ -106,9 +99,16 @@ func GetNeuronMetricRelabelConfigs(hostinfo prometheusscraper.HostInfoProvider) 
 		},
 		{
 			SourceLabels: model.LabelNames{"instance_id"},
-			TargetLabel:  ci.NodeNameKey,
+			TargetLabel:  ci.InstanceID,
 			Regex:        relabel.MustNewRegexp("(.*)"),
-			Replacement:  os.Getenv("HOST_NAME"),
+			Replacement:  hostinfo.GetInstanceID(),
+			Action:       relabel.Replace,
+		},
+		{
+			SourceLabels: model.LabelNames{"instance_type"},
+			TargetLabel:  ci.InstanceType,
+			Regex:        relabel.MustNewRegexp("(.*)"),
+			Replacement:  hostinfo.GetInstanceType(),
 			Action:       relabel.Replace,
 		},
 	}

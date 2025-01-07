@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/amazon-contributing/opentelemetry-collector-contrib/extension/awsmiddleware"
+
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/pmetric"
@@ -78,8 +80,13 @@ func newAWSContainerInsightReceiver(
 // Start collecting metrics from cadvisor and k8s api server (if it is an elected leader)
 func (acir *awsContainerInsightReceiver) Start(ctx context.Context, host component.Host) error {
 	ctx, acir.cancel = context.WithCancel(ctx)
+	var configurer *awsmiddleware.Configurer
+	if acir.config != nil && acir.config.MiddlewareID != nil {
+		configurer, _ = awsmiddleware.GetConfigurer(host.GetExtensions(), *acir.config.MiddlewareID)
+	}
+
 	hostInfo, hostInfoErr := hostinfo.NewInfo(acir.config.AWSSessionSettings, acir.config.ContainerOrchestrator,
-		acir.config.CollectionInterval, acir.settings.Logger, hostinfo.WithClusterName(acir.config.ClusterName),
+		acir.config.CollectionInterval, acir.settings.Logger, configurer, hostinfo.WithClusterName(acir.config.ClusterName),
 		hostinfo.WithSystemdEnabled(acir.config.RunOnSystemd))
 	if hostInfoErr != nil {
 		return hostInfoErr
@@ -142,8 +149,8 @@ func (acir *awsContainerInsightReceiver) initEKS(ctx context.Context, host compo
 	hostName string, kubeletClient *kubeletutil.KubeletClient) error {
 	k8sDecorator, err := stores.NewK8sDecorator(ctx, kubeletClient, acir.config.TagService, acir.config.PrefFullPodName,
 		acir.config.AddFullPodNameMetricLabel, acir.config.AddContainerNameMetricLabel,
-		acir.config.EnableControlPlaneMetrics, acir.config.KubeConfigPath, hostName,
-		acir.config.RunOnSystemd, acir.settings.Logger)
+		acir.config.EnableControlPlaneMetrics, acir.config.EnableAcceleratedComputeMetrics,
+		acir.config.KubeConfigPath, hostName, acir.config.RunOnSystemd, acir.settings.Logger)
 	if err != nil {
 		acir.settings.Logger.Warn("Unable to start K8s decorator", zap.Error(err))
 	} else {
@@ -177,7 +184,7 @@ func (acir *awsContainerInsightReceiver) initEKS(ctx context.Context, host compo
 			acir.settings.Logger.Warn("Unable to elect leader node", zap.Error(err))
 		}
 
-		acir.k8sapiserver, err = k8sapiserver.NewK8sAPIServer(hostInfo, acir.settings.Logger, leaderElection, acir.config.AddFullPodNameMetricLabel, acir.config.EnableControlPlaneMetrics, acir.config.EnableAcceleratedComputeMetrics)
+		acir.k8sapiserver, err = k8sapiserver.NewK8sAPIServer(hostInfo, acir.settings.Logger, leaderElection, acir.config.AddFullPodNameMetricLabel, acir.config.EnableControlPlaneMetrics)
 		if err != nil {
 			acir.k8sapiserver = nil
 			acir.settings.Logger.Warn("Unable to connect to api-server", zap.Error(err))
@@ -190,7 +197,7 @@ func (acir *awsContainerInsightReceiver) initEKS(ctx context.Context, host compo
 			}
 		}
 
-		err = acir.initDcgmScraper(ctx, host, hostInfo, k8sDecorator)
+		err = acir.initDcgmScraper(ctx, host, hostInfo, localNodeDecorator)
 		if err != nil {
 			acir.settings.Logger.Debug("Unable to start dcgm scraper", zap.Error(err))
 		}
@@ -198,7 +205,7 @@ func (acir *awsContainerInsightReceiver) initEKS(ctx context.Context, host compo
 		if err != nil {
 			acir.settings.Logger.Debug("Unable to start pod resources store", zap.Error(err))
 		}
-		err = acir.initNeuronScraper(ctx, host, hostInfo, k8sDecorator)
+		err = acir.initNeuronScraper(ctx, host, hostInfo, localNodeDecorator)
 		if err != nil {
 			acir.settings.Logger.Debug("Unable to start neuron scraper", zap.Error(err))
 		}
@@ -286,7 +293,8 @@ func (acir *awsContainerInsightReceiver) initPrometheusScraper(ctx context.Conte
 	})
 	return err
 }
-func (acir *awsContainerInsightReceiver) initDcgmScraper(ctx context.Context, host component.Host, hostInfo *hostinfo.Info, decorator *stores.K8sDecorator) error {
+
+func (acir *awsContainerInsightReceiver) initDcgmScraper(ctx context.Context, host component.Host, hostInfo *hostinfo.Info, localNodeDecorator stores.Decorator) error {
 	if !acir.config.EnableAcceleratedComputeMetrics {
 		return nil
 	}
@@ -296,7 +304,7 @@ func (acir *awsContainerInsightReceiver) initDcgmScraper(ctx context.Context, ho
 		NextConsumer:          acir.nextConsumer,
 		MetricType:            ci.TypeContainerGPU,
 		MetricToUnitMap:       gpu.MetricToUnit,
-		K8sDecorator:          decorator,
+		K8sDecorator:          localNodeDecorator,
 		Logger:                acir.settings.Logger,
 	}
 
@@ -321,7 +329,7 @@ func (acir *awsContainerInsightReceiver) initPodResourcesStore() error {
 	return err
 }
 
-func (acir *awsContainerInsightReceiver) initNeuronScraper(ctx context.Context, host component.Host, hostInfo *hostinfo.Info, decorator *stores.K8sDecorator) error {
+func (acir *awsContainerInsightReceiver) initNeuronScraper(ctx context.Context, host component.Host, hostInfo *hostinfo.Info, localNodeDecorator stores.Decorator) error {
 	if !acir.config.EnableAcceleratedComputeMetrics {
 		return nil
 	}
@@ -331,7 +339,7 @@ func (acir *awsContainerInsightReceiver) initNeuronScraper(ctx context.Context, 
 		ContainerOrchestrator: ci.EKS,
 		NextConsumer:          acir.nextConsumer,
 		MetricType:            ci.TypeContainerNeuron,
-		K8sDecorator:          decorator,
+		K8sDecorator:          localNodeDecorator,
 		Logger:                acir.settings.Logger,
 	}
 
@@ -368,7 +376,7 @@ func (acir *awsContainerInsightReceiver) initNeuronScraper(ctx context.Context, 
 	return err
 }
 
-func (acir *awsContainerInsightReceiver) initEfaSysfsScraper(localnodeDecorator stores.Decorator) error {
+func (acir *awsContainerInsightReceiver) initEfaSysfsScraper(localNodeDecorator stores.Decorator) error {
 	if !acir.config.EnableAcceleratedComputeMetrics {
 		return nil
 	}
@@ -376,7 +384,7 @@ func (acir *awsContainerInsightReceiver) initEfaSysfsScraper(localnodeDecorator 
 	if acir.podResourcesStore == nil {
 		return errors.New("pod resources store was not initialized")
 	}
-	acir.efaSysfsScraper = efa.NewEfaSyfsScraper(acir.settings.Logger, localnodeDecorator, acir.podResourcesStore)
+	acir.efaSysfsScraper = efa.NewEfaSyfsScraper(acir.settings.Logger, localNodeDecorator, acir.podResourcesStore)
 	return nil
 }
 
@@ -422,7 +430,7 @@ func (acir *awsContainerInsightReceiver) Shutdown(context.Context) error {
 
 }
 
-// collectData collects container stats from Amazon ECS Task Metadata Endpoint
+// collectData collects container stats from cAdvisor and k8s api server (if it is an elected leader)
 func (acir *awsContainerInsightReceiver) collectData(ctx context.Context) error {
 	var mds []pmetric.Metrics
 

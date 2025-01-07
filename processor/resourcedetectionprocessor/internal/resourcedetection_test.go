@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws/request"
+	"go.opentelemetry.io/collector/component"
 	"net/http"
 	"sync"
 	"testing"
@@ -94,14 +96,14 @@ func TestDetect(t *testing.T) {
 				md.On("Detect").Return(res, nil)
 
 				mockDetectorType := DetectorType(fmt.Sprintf("mockdetector%v", i))
-				mockDetectors[mockDetectorType] = func(processor.CreateSettings, DetectorConfig) (Detector, error) {
+				mockDetectors[mockDetectorType] = func(processor.Settings, DetectorConfig) (Detector, error) {
 					return md, nil
 				}
 				mockDetectorTypes = append(mockDetectorTypes, mockDetectorType)
 			}
 
 			f := NewProviderFactory(mockDetectors)
-			p, err := f.CreateResourceProvider(processortest.NewNopCreateSettings(), time.Second, tt.attributes, &mockDetectorConfig{}, mockDetectorTypes...)
+			p, err := f.CreateResourceProvider(processortest.NewNopSettings(), time.Second, tt.attributes, &mockDetectorConfig{}, mockDetectorTypes...)
 			require.NoError(t, err)
 
 			got, _, err := p.Get(context.Background(), http.DefaultClient)
@@ -115,18 +117,18 @@ func TestDetect(t *testing.T) {
 func TestDetectResource_InvalidDetectorType(t *testing.T) {
 	mockDetectorKey := DetectorType("mock")
 	p := NewProviderFactory(map[DetectorType]DetectorFactory{})
-	_, err := p.CreateResourceProvider(processortest.NewNopCreateSettings(), time.Second, nil, &mockDetectorConfig{}, mockDetectorKey)
+	_, err := p.CreateResourceProvider(processortest.NewNopSettings(), time.Second, nil, &mockDetectorConfig{}, mockDetectorKey)
 	require.EqualError(t, err, fmt.Sprintf("invalid detector key: %v", mockDetectorKey))
 }
 
 func TestDetectResource_DetectoryFactoryError(t *testing.T) {
 	mockDetectorKey := DetectorType("mock")
 	p := NewProviderFactory(map[DetectorType]DetectorFactory{
-		mockDetectorKey: func(processor.CreateSettings, DetectorConfig) (Detector, error) {
+		mockDetectorKey: func(processor.Settings, DetectorConfig) (Detector, error) {
 			return nil, errors.New("creation failed")
 		},
 	})
-	_, err := p.CreateResourceProvider(processortest.NewNopCreateSettings(), time.Second, nil, &mockDetectorConfig{}, mockDetectorKey)
+	_, err := p.CreateResourceProvider(processortest.NewNopSettings(), time.Second, nil, &mockDetectorConfig{}, mockDetectorKey)
 	require.EqualError(t, err, fmt.Sprintf("failed creating detector type %q: %v", mockDetectorKey, "creation failed"))
 }
 
@@ -316,4 +318,101 @@ func TestFilterAttributes_NoAttributes(t *testing.T) {
 	assert.True(t, ok)
 
 	assert.Equal(t, len(droppedAttributes), 0)
+}
+
+// mockDetectorWithHandler is a mock detector that implements HandlerProvider
+type mockDetectorWithHandler struct {
+	handlersCalled bool
+}
+
+func (m *mockDetectorWithHandler) Detect(ctx context.Context) (resource pcommon.Resource, schemaURL string, err error) {
+	return pcommon.NewResource(), "", nil
+}
+
+func (m *mockDetectorWithHandler) ExposeHandlers() *request.Handlers {
+	m.handlersCalled = true
+	return &request.Handlers{}
+}
+
+// mockExtension implements component.Component
+type mockExtension struct {
+	configured bool
+}
+
+func (m *mockExtension) Start(context.Context, component.Host) error {
+	return nil
+}
+
+func (m *mockExtension) Shutdown(context.Context) error {
+	return nil
+}
+
+// mockHost implements component.Host
+type mockHost struct {
+	extensions map[component.ID]component.Component
+}
+
+// mockDetector is a basic detector that doesn't implement HandlerProvider
+type mockDetector struct{}
+
+func (m *mockDetector) Detect(ctx context.Context) (resource pcommon.Resource, schemaURL string, err error) {
+	return pcommon.NewResource(), "", nil
+}
+
+func newMockHost() component.Host {
+	return &mockHost{
+		extensions: make(map[component.ID]component.Component),
+	}
+}
+
+func (m *mockHost) GetExtension(id component.ID) (component.Component, error) {
+	if ext, ok := m.extensions[id]; ok {
+		return ext, nil
+	}
+	return nil, nil
+}
+
+func (m *mockHost) ReportFatalError(err error) {}
+
+func (m *mockHost) GetFactory(kind component.Kind, componentType component.Type) component.Factory {
+	return nil
+}
+
+func (m *mockHost) GetExtensions() map[component.ID]component.Component {
+	return m.extensions
+}
+
+func (m *mockHost) GetExporters() map[component.DataType]map[component.ID]component.Component {
+	return nil
+}
+
+func TestConfigureHandlers(t *testing.T) {
+	testType, _ := component.NewType("awsmiddleware")
+	mockDetector := &mockDetectorWithHandler{}
+	logger := zap.NewNop()
+	provider := NewResourceProvider(logger, 0, nil, mockDetector)
+	mockExt := &mockExtension{}
+	host := newMockHost()
+	host.(*mockHost).extensions[component.NewID(testType)] = mockExt
+
+	middlewareID := component.NewID(testType)
+	ctx := context.Background()
+	provider.ConfigureHandlers(ctx, host, middlewareID)
+
+	assert.True(t, mockDetector.handlersCalled, "ExposeHandlers should have been called")
+}
+
+func TestConfigureHandlersWithNonHandlerDetector(t *testing.T) {
+	testType, _ := component.NewType("awsmiddleware")
+	basicDetector := &mockDetector{}
+	logger := zap.NewNop()
+	provider := NewResourceProvider(logger, 0, nil, basicDetector)
+
+	mockExt := &mockExtension{}
+	host := newMockHost()
+	host.(*mockHost).extensions[component.NewID(testType)] = mockExt
+	middlewareID := component.NewID(testType)
+
+	ctx := context.Background()
+	provider.ConfigureHandlers(ctx, host, middlewareID)
 }

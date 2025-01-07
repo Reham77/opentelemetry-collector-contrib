@@ -5,7 +5,9 @@ package awsxrayexporter // import "github.com/open-telemetry/opentelemetry-colle
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
+	"fmt"
 
 	"github.com/amazon-contributing/opentelemetry-collector-contrib/extension/awsmiddleware"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -15,6 +17,7 @@ import (
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	"go.opentelemetry.io/collector/pdata/ptrace/ptraceotlp"
 	"go.uber.org/zap"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awsxrayexporter/internal/translator"
@@ -24,31 +27,27 @@ import (
 )
 
 const (
-	maxSegmentsPerPut = int(50) // limit imposed by PutTraceSegments API
+	maxSegmentsPerPut               = int(50) // limit imposed by PutTraceSegments API
+	otlpFormatPrefix                = "T1S"   // X-Ray PutTraceSegment API uses this prefix to detect the format
+	otlpFormatKeyIndexAllAttributes = "aws.xray.exporter.config.index_all_attributes"
+	otlpFormatKeyIndexAttributes    = "aws.xray.exporter.config.indexed_attributes"
 )
 
 // newTracesExporter creates an exporter.Traces that converts to an X-Ray PutTraceSegments
 // request and then posts the request to the configured region's X-Ray endpoint.
 func newTracesExporter(
 	cfg *Config,
-	set exporter.CreateSettings,
+	set exporter.Settings,
 	cn awsutil.ConnAttr,
 	registry telemetry.Registry,
 ) (exporter.Traces, error) {
 	typeLog := zap.String("type", set.ID.Type().String())
 	nameLog := zap.String("name", set.ID.String())
 	logger := set.Logger
-	awsConfig, session, err := awsutil.GetAWSConfigSession(logger, cn, &cfg.AWSSessionSettings)
-	if err != nil {
-		return nil, err
-	}
-	xrayClient := awsxray.NewXRayClient(logger, awsConfig, set.BuildInfo, session)
-	sender := telemetry.NewNopSender()
-	if cfg.TelemetryConfig.Enabled {
-		opts := telemetry.ToOptions(cfg.TelemetryConfig, session, &cfg.AWSSessionSettings)
-		opts = append(opts, telemetry.WithLogger(set.Logger))
-		sender = registry.Register(set.ID, cfg.TelemetryConfig, xrayClient, opts...)
-	}
+
+	var xrayClient awsxray.XRayClient
+	var sender telemetry.Sender = telemetry.NewNopSender()
+
 	return exporterhelper.NewTracesExporter(
 		context.TODO(),
 		set,
@@ -57,7 +56,15 @@ func newTracesExporter(
 			var err error
 			logger.Debug("TracesExporter", typeLog, nameLog, zap.Int("#spans", td.SpanCount()))
 
-			documents := extractResourceSpans(cfg, logger, td)
+			var documents []*string
+			if cfg.TransitSpansInOtlpFormat {
+				documents, err = encodeOtlpAsBase64(td, cfg)
+				if err != nil {
+					return err
+				}
+			} else { // by default use xray format
+				documents = extractResourceSpans(cfg, logger, td)
+			}
 
 			for offset := 0; offset < len(documents); offset += maxSegmentsPerPut {
 				var nextOffset int
@@ -86,6 +93,18 @@ func newTracesExporter(
 			return err
 		},
 		exporterhelper.WithStart(func(_ context.Context, host component.Host) error {
+			awsConfig, session, err := awsutil.GetAWSConfigSession(logger, cn, &cfg.AWSSessionSettings)
+			if err != nil {
+				return err
+			}
+			xrayClient = awsxray.NewXRayClient(logger, awsConfig, set.BuildInfo, session)
+
+			if cfg.TelemetryConfig.Enabled {
+				opts := telemetry.ToOptions(cfg.TelemetryConfig, session, &cfg.AWSSessionSettings)
+				opts = append(opts, telemetry.WithLogger(set.Logger))
+				sender = registry.Register(set.ID, cfg.TelemetryConfig, xrayClient, opts...)
+			}
+
 			sender.Start()
 			if cfg.MiddlewareID != nil {
 				awsmiddleware.TryConfigure(logger, host, *cfg.MiddlewareID, awsmiddleware.SDKv1(xrayClient.Handlers()))
@@ -136,4 +155,38 @@ func wrapErrorIfBadRequest(err error) error {
 		return consumererror.NewPermanent(err)
 	}
 	return err
+}
+
+// encodeOtlpAsBase64 builds bytes from traces and generate base64 value for them
+func encodeOtlpAsBase64(td ptrace.Traces, cfg *Config) ([]*string, error) {
+	var documents []*string
+	for i := 0; i < td.ResourceSpans().Len(); i++ {
+		// 1. build a new trace with one resource span
+		singleTrace := ptrace.NewTraces()
+		td.ResourceSpans().At(i).CopyTo(singleTrace.ResourceSpans().AppendEmpty())
+
+		// 2. append index configuration to resource span as attributes, such that X-Ray Service build indexes based on them.
+		injectIndexConfigIntoOtlpPayload(singleTrace.ResourceSpans().At(0), cfg)
+
+		// 3. Marshal single trace into proto bytes
+		bytes, err := ptraceotlp.NewExportRequestFromTraces(singleTrace).MarshalProto()
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal traces: %w", err)
+		}
+
+		// 4. build bytes into base64 and append with PROTOCOL HEADER at the beginning
+		base64Str := otlpFormatPrefix + base64.StdEncoding.EncodeToString(bytes)
+		documents = append(documents, &base64Str)
+	}
+
+	return documents, nil
+}
+
+func injectIndexConfigIntoOtlpPayload(resourceSpan ptrace.ResourceSpans, cfg *Config) {
+	attributes := resourceSpan.Resource().Attributes()
+	attributes.PutBool(otlpFormatKeyIndexAllAttributes, cfg.IndexAllAttributes)
+	indexAttributes := attributes.PutEmptySlice(otlpFormatKeyIndexAttributes)
+	for _, indexAttribute := range cfg.IndexedAttributes {
+		indexAttributes.AppendEmpty().SetStr(indexAttribute)
+	}
 }

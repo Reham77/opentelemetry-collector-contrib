@@ -32,6 +32,13 @@ func init() {
 type mockPusher struct {
 	mock.Mock
 }
+type mockHost struct {
+	component.Host
+}
+
+func (m *mockHost) GetExtensions() map[component.ID]component.Component {
+	return nil
+}
 
 func (p *mockPusher) AddLogEntry(_ *cwlogs.Event) error {
 	args := p.Called(nil)
@@ -396,7 +403,7 @@ func TestConsumeLogs(t *testing.T) {
 	expCfg.LogGroupName = "testGroup"
 	expCfg.LogStreamName = "testStream"
 	expCfg.MaxRetries = 0
-	exp, err := newCwLogsPusher(expCfg, exportertest.NewNopCreateSettings())
+	exp, err := newCwLogsPusher(expCfg, exportertest.NewNopSettings())
 
 	testcases := []struct {
 		id                 string
@@ -487,7 +494,7 @@ func TestMiddleware(t *testing.T) {
 	middleware := new(awsmiddleware.MockMiddlewareExtension)
 	middleware.On("Handlers").Return([]awsmiddleware.RequestHandler{handler}, []awsmiddleware.ResponseHandler{handler})
 	extensions := map[component.ID]component.Component{id: middleware}
-	exp, err := newCwLogsPusher(expCfg, exportertest.NewNopCreateSettings())
+	exp, err := newCwLogsPusher(expCfg, exportertest.NewNopSettings())
 	assert.Nil(t, err)
 	assert.NotNil(t, exp)
 	host := new(awsmiddleware.MockExtensionsHost)
@@ -509,7 +516,14 @@ func TestNewExporterWithoutRegionErr(t *testing.T) {
 	factory := NewFactory()
 	expCfg := factory.CreateDefaultConfig().(*Config)
 	expCfg.MaxRetries = 0
-	exp, err := newCwLogsExporter(expCfg, exportertest.NewNopCreateSettings())
-	assert.Nil(t, exp)
-	assert.Error(t, err)
+	expCfg.Region = "" // Ensure the region is not set
+
+	exp, err := newCwLogsExporter(expCfg, exportertest.NewNopSettings())
+	assert.NoError(t, err) // The exporter creation should not fail
+	assert.NotNil(t, exp)  // The exporter should be created
+
+	// Now try to start the exporter
+	err = exp.Start(context.Background(), &mockHost{})
+	assert.Error(t, err) // The start should fail due to missing region
+	assert.Contains(t, err.Error(), "NoAwsRegion")
 }

@@ -141,9 +141,23 @@ const (
 	EfaRxDropped          = "rx_dropped"
 	EfaTxBytes            = "tx_bytes"
 
-	GpuLimit   = "gpu_limit"
-	GpuTotal   = "gpu_total"
-	GpuRequest = "gpu_request"
+	GpuLimit            = "gpu_limit"
+	GpuUsageTotal       = "gpu_usage_total"
+	GpuRequest          = "gpu_request"
+	GpuReservedCapacity = "gpu_reserved_capacity"
+
+	HyperPodUnschedulablePendingReplacement = "unschedulable_pending_replacement"
+	HyperPodUnschedulablePendingReboot      = "unschedulable_pending_reboot"
+	HyperPodSchedulable                     = "schedulable"
+	HyperPodUnschedulable                   = "unschedulable"
+
+	// kueue metrics
+
+	KueuePendingWorkloads          = "kueue_pending_workloads"
+	KueueEvictedWorkloadsTotal     = "kueue_evicted_workloads_total"
+	KueueAdmittedActiveWorkloads   = "kueue_admitted_active_workloads"
+	KueueClusterQueueResourceUsage = "kueue_cluster_queue_resource_usage"
+	KueueClusterQueueNominalQuota  = "kueue_cluster_queue_nominal_quota"
 
 	// Define the metric types
 	TypeCluster            = "Cluster"
@@ -167,6 +181,10 @@ const (
 	TypeContainer          = "Container"
 	TypeContainerFS        = "ContainerFS"
 	TypeContainerDiskIO    = "ContainerDiskIO"
+
+	// kueue metric types
+	TypeClusterQueue = "ClusterQueue"
+
 	// Special type for pause container
 	// because containerd does not set container name pause container name to POD like docker does.
 	TypeInfraContainer  = "InfraContainer"
@@ -178,10 +196,12 @@ const (
 	TypeContainerEFA    = "ContainerEFA"
 	TypePodEFA          = "PodEFA"
 	TypeNodeEFA         = "NodeEFA"
+	TypeHyperPodNode    = "HyperPodNode"
 
 	// unit
 	UnitBytes       = "Bytes"
 	UnitMegaBytes   = "Megabytes"
+	UnitSecond      = "Second"
 	UnitNanoSecond  = "Nanoseconds"
 	UnitBytesPerSec = "Bytes/Second"
 	UnitCount       = "Count"
@@ -199,6 +219,13 @@ var WaitingReasonLookup = map[string]string{
 	"CreateContainerError":       StatusContainerWaitingReasonCreateContainerError,
 	"CreateContainerConfigError": StatusContainerWaitingReasonCreateContainerConfigError,
 	"StartError":                 StatusContainerWaitingReasonStartError,
+}
+
+var HyperPodConditionToMetric = map[string]string{
+	"UnschedulablePendingReplacement": HyperPodUnschedulablePendingReplacement,
+	"UnschedulablePendingReboot":      HyperPodUnschedulablePendingReboot,
+	"Schedulable":                     HyperPodSchedulable,
+	"Unschedulable":                   HyperPodUnschedulable,
 }
 
 var metricToUnitMap map[string]string
@@ -311,6 +338,15 @@ func init() {
 		NodeCount:       UnitCount,
 		FailedNodeCount: UnitCount,
 
+		// kueue metrics
+		KueuePendingWorkloads:          UnitCount,
+		KueueEvictedWorkloadsTotal:     UnitCount,
+		KueueAdmittedActiveWorkloads:   UnitCount,
+		KueueClusterQueueResourceUsage: UnitCount,
+		KueueClusterQueueNominalQuota:  UnitCount,
+		// unit for KueueClusterQueue resource metrics depend on resource type. UnitCount is appropriate
+		// for CPU and CPU cores, but UnitBytes would be more appropriate for resource type memory.
+
 		// others
 		RunningPodCount:       UnitCount,
 		RunningContainerCount: UnitCount,
@@ -325,8 +361,14 @@ func init() {
 		EfaRxDropped:          UnitCountPerSec,
 		EfaTxBytes:            UnitBytesPerSec,
 
-		GpuLimit:   UnitCount,
-		GpuTotal:   UnitCount,
-		GpuRequest: UnitCount,
+		GpuLimit:            UnitCount,
+		GpuUsageTotal:       UnitCount,
+		GpuRequest:          UnitCount,
+		GpuReservedCapacity: UnitPercent,
+
+		HyperPodUnschedulablePendingReplacement: UnitCount,
+		HyperPodUnschedulablePendingReboot:      UnitCount,
+		HyperPodSchedulable:                     UnitCount,
+		HyperPodUnschedulable:                   UnitCount,
 	}
 }

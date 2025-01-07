@@ -5,7 +5,6 @@ package k8sutil // import "github.com/open-telemetry/opentelemetry-collector-con
 
 import (
 	"fmt"
-	"strings"
 )
 
 // CreatePodKey concatenates namespace and podName to get a pod key
@@ -24,10 +23,33 @@ func CreateContainerKey(namespace, podName, containerName string) string {
 	return fmt.Sprintf("namespace:%s,podName:%s,containerName:%s", namespace, podName, containerName)
 }
 
-// ParseInstanceIdFromProviderId parses EC2 instance id from node's provider id which has format of aws:///<subnet>/<instanceId>
-func ParseInstanceIdFromProviderId(providerId string) string {
-	if providerId == "" || !strings.HasPrefix(providerId, "aws://") {
-		return ""
+type HyperPodConditionType int8
+
+const (
+	Schedulable HyperPodConditionType = iota
+	UnschedulablePendingReplacement
+	UnschedulablePendingReboot
+	Unschedulable
+)
+
+func (ct HyperPodConditionType) String() string {
+	return [...]string{"Schedulable", "UnschedulablePendingReplacement", "UnschedulablePendingReboot", "Unschedulable"}[ct]
+}
+
+func (ct HyperPodConditionType) EnumIndex() int {
+	return int(ct)
+}
+
+var (
+	HyperPodConditionTypeMap = map[string]HyperPodConditionType{
+		"Schedulable":                     Schedulable,
+		"UnschedulablePendingReplacement": UnschedulablePendingReplacement,
+		"UnschedulablePendingReboot":      UnschedulablePendingReboot,
+		"Unschedulable":                   Unschedulable,
 	}
-	return providerId[strings.LastIndex(providerId, "/")+1:]
+)
+
+func ParseString(str string) (int8, bool) {
+	c, ok := HyperPodConditionTypeMap[str]
+	return int8(c), ok
 }

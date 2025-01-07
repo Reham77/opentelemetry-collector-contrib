@@ -12,11 +12,21 @@ type NodeInfo struct {
 	Conditions   []*NodeCondition
 	Capacity     v1.ResourceList
 	Allocatable  v1.ResourceList
-	ProviderId   string
 	InstanceType string
+	Labels       map[Label]int8
 }
 
 type NodeCondition struct {
 	Type   v1.NodeConditionType
 	Status v1.ConditionStatus
+}
+
+type Label int8
+
+const (
+	SageMakerNodeHealthStatus Label = iota
+)
+
+func (ct Label) String() string {
+	return [...]string{"sagemaker.amazonaws.com/node-health-status"}[ct]
 }

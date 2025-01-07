@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 )
@@ -194,7 +193,7 @@ func TestTransformFuncPod(t *testing.T) {
 }
 
 func TestPodClient_PodInfos(t *testing.T) {
-	//skip(t, "Flaky test - See https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/11078")
+	// skip(t, "Flaky test - See https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/11078")
 	setOption := podSyncCheckerOption(&mockReflectorSyncChecker{})
 
 	samplePodArray := []any{
@@ -210,22 +209,6 @@ func TestPodClient_PodInfos(t *testing.T) {
 			},
 			Status: v1.PodStatus{
 				Phase: "Running",
-			},
-			Spec: v1.PodSpec{
-				NodeName: "node-1",
-				Containers: []v1.Container{
-					{
-						Name: "container-1",
-						Resources: v1.ResourceRequirements{
-							Limits: v1.ResourceList{
-								"nvidia.com/gpu": resource.MustParse("1"),
-							},
-							Requests: v1.ResourceList{
-								"nvidia.com/gpu": resource.MustParse("1"),
-							},
-						},
-					},
-				},
 			},
 		},
 	}
@@ -243,21 +226,7 @@ func TestPodClient_PodInfos(t *testing.T) {
 			Labels: map[string]string{
 				"key": "value",
 			},
-			Phase:    v1.PodRunning,
-			NodeName: "node-1",
-			Containers: []*ContainerInfo{
-				{
-					Name: "container-1",
-					Resources: v1.ResourceRequirements{
-						Limits: v1.ResourceList{
-							"nvidia.com/gpu": resource.MustParse("1"),
-						},
-						Requests: v1.ResourceList{
-							"nvidia.com/gpu": resource.MustParse("1"),
-						},
-					},
-				},
-			},
+			Phase: v1.PodRunning,
 		},
 	}
 

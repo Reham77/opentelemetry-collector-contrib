@@ -23,6 +23,7 @@ import (
 
 	ci "github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/containerinsight"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/k8s/k8sclient"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/k8s/k8sutil"
 )
 
 func NewService(name, namespace string) k8sclient.Service {
@@ -140,20 +141,24 @@ func (client *MockClient) PodInfos() []*k8sclient.PodInfo {
 }
 
 // k8sclient.NodeClient
-func (client *MockClient) NodeInfos() map[string]*k8sclient.NodeInfo {
-	args := client.Called()
-	return args.Get(0).(map[string]*k8sclient.NodeInfo)
-}
-
-// k8sclient.NodeClient
 func (client *MockClient) ClusterFailedNodeCount() int {
 	args := client.Called()
 	return args.Get(0).(int)
 }
 
+func (client *MockClient) NodeInfos() map[string]*k8sclient.NodeInfo {
+	args := client.Called()
+	return args.Get(0).(map[string]*k8sclient.NodeInfo)
+}
+
 func (client *MockClient) ClusterNodeCount() int {
 	args := client.Called()
 	return args.Get(0).(int)
+}
+
+func (client *MockClient) NodeToLabelsMap() map[string]map[k8sclient.Label]int8 {
+	args := client.Called()
+	return args.Get(0).(map[string]map[k8sclient.Label]int8)
 }
 
 // k8sclient.EpClient
@@ -231,7 +236,7 @@ func (m mockClusterNameProvider) GetClusterName() string {
 }
 
 func TestK8sAPIServer_New(t *testing.T) {
-	k8sAPIServer, err := NewK8sAPIServer(mockClusterNameProvider{}, zap.NewNop(), nil, false, false, false)
+	k8sAPIServer, err := NewK8sAPIServer(mockClusterNameProvider{}, zap.NewNop(), nil, false, false)
 	assert.Nil(t, k8sAPIServer)
 	assert.NotNil(t, err)
 }
@@ -311,28 +316,12 @@ func TestK8sAPIServer_GetMetrics(t *testing.T) {
 			UID:       "bc5f5839-f62e-44b9-a79e-af250d92dcb1",
 			Phase:     v1.PodPending,
 		},
-		{
-			Name:      "gpu-burn-6dcbd994fb-9fn8w",
-			Namespace: "amazon-cloudwatch",
-			NodeName:  "ip-192-168-57-23.us-west-2.compute.internal",
-			UID:       "bc5f5839-f62e-44b9-a79e-af250d92dcb1",
-			Phase:     v1.PodRunning,
-			Containers: []*k8sclient.ContainerInfo{
-				{
-					Name: "container-1",
-					Resources: v1.ResourceRequirements{
-						Limits: v1.ResourceList{
-							resourceSpecNvidiaGpuKey: resource.MustParse("2"),
-						},
-					},
-				},
-			},
-		},
 	})
 	mockClient.On("PodKeyToServiceNames").Return(map[string][]string{
 		"namespace:kube-system,podName:coredns-7554568866-26jdf": {"kube-dns"},
 		"namespace:kube-system,podName:coredns-7554568866-shwn6": {"kube-dns"},
 	})
+
 	mockClient.On("NodeInfos").Return(map[string]*k8sclient.NodeInfo{
 		"ip-192-168-57-23.us-west-2.compute.internal": {
 			Name: "ip-192-168-57-23.us-west-2.compute.internal",
@@ -344,8 +333,16 @@ func TestK8sAPIServer_GetMetrics(t *testing.T) {
 			},
 			Capacity:     map[v1.ResourceName]resource.Quantity{},
 			Allocatable:  map[v1.ResourceName]resource.Quantity{},
-			ProviderId:   "aws:///us-west-2/i-abcdef123456789",
-			InstanceType: "g4dn-12xl",
+			InstanceType: "ml.g4dn-12xl",
+			Labels: map[k8sclient.Label]int8{
+				k8sclient.SageMakerNodeHealthStatus: int8(k8sutil.Schedulable),
+			},
+		},
+	})
+
+	mockClient.On("NodeToLabelsMap").Return(map[string]map[k8sclient.Label]int8{
+		"ip-192-168-57-23.us-west-2.compute.internal": {
+			k8sclient.SageMakerNodeHealthStatus: int8(k8sutil.Schedulable),
 		},
 	})
 
@@ -365,7 +362,7 @@ func TestK8sAPIServer_GetMetrics(t *testing.T) {
 
 	t.Setenv("HOST_NAME", hostName)
 	t.Setenv("K8S_NAMESPACE", "namespace")
-	k8sAPIServer, err := NewK8sAPIServer(mockClusterNameProvider{}, zap.NewNop(), leaderElection, true, true, true)
+	k8sAPIServer, err := NewK8sAPIServer(mockClusterNameProvider{}, zap.NewNop(), leaderElection, true, true)
 
 	assert.NotNil(t, k8sAPIServer)
 	assert.Nil(t, err)
@@ -440,13 +437,14 @@ func TestK8sAPIServer_GetMetrics(t *testing.T) {
 			assert.Equal(t, "kube-system", getStringAttrVal(metric, ci.AttributeK8sNamespace))
 			assert.Equal(t, "Pending", getStringAttrVal(metric, "pod_status"))
 			assert.Equal(t, "Pod", getStringAttrVal(metric, ci.MetricType))
-		case ci.TypePodGPU:
-			assertMetricValueEqual(t, metric, "pod_gpu_limit", int64(2))
-			assertMetricValueEqual(t, metric, "pod_gpu_total", int64(2))
-			assert.Equal(t, "amazon-cloudwatch", getStringAttrVal(metric, ci.AttributeK8sNamespace))
-			assert.Equal(t, ci.TypePodGPU, getStringAttrVal(metric, ci.MetricType))
-			assert.Equal(t, "i-abcdef123456789", getStringAttrVal(metric, ci.InstanceID))
-			assert.Equal(t, "g4dn-12xl", getStringAttrVal(metric, ci.InstanceType))
+		case ci.TypeHyperPodNode:
+			assert.Equal(t, "HyperPodNode", getStringAttrVal(metric, ci.MetricType))
+			assert.Equal(t, "ip-192-168-57-23.us-west-2.compute.internal", getStringAttrVal(metric, ci.NodeNameKey))
+			assert.Equal(t, "ip-192-168-57-23.us-west-2.compute.internal", getStringAttrVal(metric, ci.InstanceID))
+			assertMetricValueEqual(t, metric, "hyperpod_node_health_status_unschedulable_pending_reboot", int64(0))
+			assertMetricValueEqual(t, metric, "hyperpod_node_health_status_schedulable", int64(1))
+			assertMetricValueEqual(t, metric, "hyperpod_node_health_status_unschedulable", int64(0))
+			assertMetricValueEqual(t, metric, "hyperpod_node_health_status_unschedulable_pending_replacement", int64(0))
 		default:
 			assert.Fail(t, "Unexpected metric type: "+metricType)
 		}

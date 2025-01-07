@@ -80,6 +80,7 @@ type groupedMetricMetadata struct {
 	logGroup                   string
 	logStream                  string
 	metricDataType             pmetric.MetricType
+	batchIndex                 int
 	retainInitialValueForDelta bool
 }
 
@@ -133,7 +134,8 @@ func (mt metricTranslator) translateOTelToGroupedMetric(rm pmetric.ResourceMetri
 	if serviceName, ok := rm.Resource().Attributes().Get("service.name"); ok {
 		if strings.HasPrefix(serviceName.Str(), "containerInsightsKubeAPIServerScraper") ||
 			strings.HasPrefix(serviceName.Str(), "containerInsightsDCGMExporterScraper") ||
-			strings.HasPrefix(serviceName.Str(), "containerInsightsNeuronMonitorScraper") {
+			strings.HasPrefix(serviceName.Str(), "containerInsightsNeuronMonitorScraper") ||
+			strings.HasPrefix(serviceName.Str(), "containerInsightsKueueMetricsScraper") {
 			// the prometheus metrics that come from the container insight receiver need to be clearly tagged as coming from container insights
 			metricReceiver = containerInsightsReceiver
 		}
@@ -155,6 +157,7 @@ func (mt metricTranslator) translateOTelToGroupedMetric(rm pmetric.ResourceMetri
 					logGroup:                   logGroup,
 					logStream:                  logStream,
 					metricDataType:             metric.Type(),
+					batchIndex:                 0,
 					retainInitialValueForDelta: deltaInitialValue,
 				},
 				instrumentationScopeName: instrumentationScopeName,

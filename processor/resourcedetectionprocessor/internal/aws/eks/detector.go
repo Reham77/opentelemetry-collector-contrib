@@ -53,7 +53,6 @@ type eksDetectorUtils struct {
 type detector struct {
 	utils  detectorUtils
 	logger *zap.Logger
-	err    error
 	ra     metadata.ResourceAttributesConfig
 	rb     *metadata.ResourceBuilder
 }
@@ -63,14 +62,15 @@ var _ internal.Detector = (*detector)(nil)
 var _ detectorUtils = (*eksDetectorUtils)(nil)
 
 // NewDetector returns a resource detector that will detect AWS EKS resources.
-func NewDetector(set processor.CreateSettings, dcfg internal.DetectorConfig) (internal.Detector, error) {
+func NewDetector(set processor.Settings, dcfg internal.DetectorConfig) (internal.Detector, error) {
 	cfg := dcfg.(Config)
 	utils, err := newK8sDetectorUtils()
-
+	if err != nil {
+		set.Logger.Debug("Unable to setup K8s detector", zap.Error(err))
+	}
 	return &detector{
 		utils:  utils,
 		logger: set.Logger,
-		err:    err,
 		ra:     cfg.ResourceAttributes,
 		rb:     metadata.NewResourceBuilder(cfg.ResourceAttributes),
 	}, nil
@@ -78,6 +78,10 @@ func NewDetector(set processor.CreateSettings, dcfg internal.DetectorConfig) (in
 
 // Detect returns a Resource describing the Amazon EKS environment being run in.
 func (d *detector) Detect(ctx context.Context) (resource pcommon.Resource, schemaURL string, err error) {
+	// Error is already logged in the constructor
+	if d.utils == nil {
+		return pcommon.NewResource(), "", nil
+	}
 	// Check if running on EKS.
 	isEKS, err := isEKS(ctx, d.utils)
 	if !isEKS {

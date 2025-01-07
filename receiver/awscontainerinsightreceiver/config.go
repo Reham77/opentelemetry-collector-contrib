@@ -6,6 +6,8 @@ package awscontainerinsightreceiver // import "github.com/open-telemetry/opentel
 import (
 	"time"
 
+	"go.opentelemetry.io/collector/component"
+
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/awsutil"
 )
 
@@ -58,7 +60,7 @@ type Config struct {
 	// The default value is false.
 	EnableControlPlaneMetrics bool `mapstructure:"enable_control_plane_metrics"`
 
-	// EnableAcceleratedComputeMetrics enabled features with accelerated compute resources where metrics are scraped from vendor specific sources
+	// EnableAcceleratedComputeMetrics enables features with accelerated compute resources where metrics are scraped from vendor specific sources
 	EnableAcceleratedComputeMetrics bool `mapstructure:"accelerated_compute_metrics"`
 
 	// KubeConfigPath is an optional attribute to override the default kube config path in an EC2 environment
@@ -72,4 +74,8 @@ type Config struct {
 
 	// RunOnSystemd is an optional attribute to run the receiver in an EC2 environment
 	RunOnSystemd bool `mapstructure:"run_on_systemd,omitempty"`
+
+	// MiddlewareID is an ID for an extension that can be used to configure the
+	// AWS client.
+	MiddlewareID *component.ID `mapstructure:"middleware,omitempty"`
 }

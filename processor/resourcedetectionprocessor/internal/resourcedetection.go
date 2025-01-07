@@ -12,6 +12,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/amazon-contributing/opentelemetry-collector-contrib/extension/awsmiddleware"
+	"github.com/aws/aws-sdk-go/aws/request"
+	"go.opentelemetry.io/collector/component"
+
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/processor"
 	"go.uber.org/zap"
@@ -23,13 +27,16 @@ type Detector interface {
 	Detect(ctx context.Context) (resource pcommon.Resource, schemaURL string, err error)
 }
 
+type HandlerProvider interface {
+	ExposeHandlers() *request.Handlers
+}
 type DetectorConfig any
 
 type ResourceDetectorConfig interface {
 	GetConfigFromType(DetectorType) DetectorConfig
 }
 
-type DetectorFactory func(processor.CreateSettings, DetectorConfig) (Detector, error)
+type DetectorFactory func(processor.Settings, DetectorConfig) (Detector, error)
 
 type ResourceProviderFactory struct {
 	// detectors holds all possible detector types.
@@ -41,7 +48,7 @@ func NewProviderFactory(detectors map[DetectorType]DetectorFactory) *ResourcePro
 }
 
 func (f *ResourceProviderFactory) CreateResourceProvider(
-	params processor.CreateSettings,
+	params processor.Settings,
 	timeout time.Duration,
 	attributes []string,
 	detectorConfigs ResourceDetectorConfig,
@@ -62,7 +69,7 @@ func (f *ResourceProviderFactory) CreateResourceProvider(
 	return provider, nil
 }
 
-func (f *ResourceProviderFactory) getDetectors(params processor.CreateSettings, detectorConfigs ResourceDetectorConfig, detectorTypes []DetectorType) ([]Detector, error) {
+func (f *ResourceProviderFactory) getDetectors(params processor.Settings, detectorConfigs ResourceDetectorConfig, detectorTypes []DetectorType) ([]Detector, error) {
 	detectors := make([]Detector, 0, len(detectorTypes))
 	for _, detectorType := range detectorTypes {
 		detectorFactory, ok := f.detectors[detectorType]
@@ -114,6 +121,14 @@ func (p *ResourceProvider) Get(ctx context.Context, client *http.Client) (resour
 	})
 
 	return p.detectedResource.resource, p.detectedResource.schemaURL, p.detectedResource.err
+}
+
+func (p *ResourceProvider) ConfigureHandlers(ctx context.Context, host component.Host, middlewareId component.ID) {
+	for _, detector := range p.detectors {
+		if handlerDetector, ok := detector.(HandlerProvider); ok {
+			awsmiddleware.TryConfigure(p.logger, host, middlewareId, awsmiddleware.SDKv1(handlerDetector.ExposeHandlers()))
+		}
+	}
 }
 
 func (p *ResourceProvider) detectResource(ctx context.Context) {

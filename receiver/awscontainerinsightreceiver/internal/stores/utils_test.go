@@ -13,6 +13,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	ci "github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/containerinsight"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/k8s/k8sclient"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/k8s/k8sutil"
 )
 
 type mockCIMetric struct {
@@ -66,7 +68,8 @@ type mockNodeInfoProvider struct {
 func (m *mockNodeInfoProvider) NodeToCapacityMap() map[string]v1.ResourceList {
 	return map[string]v1.ResourceList{
 		"testNode1": {
-			"pods": *resource.NewQuantity(5, resource.DecimalSI),
+			"pods":           *resource.NewQuantity(5, resource.DecimalSI),
+			"nvidia.com/gpu": *resource.NewQuantity(20, resource.DecimalExponent),
 		},
 		"testNode2": {
 			"pods": *resource.NewQuantity(10, resource.DecimalSI),
@@ -77,11 +80,21 @@ func (m *mockNodeInfoProvider) NodeToCapacityMap() map[string]v1.ResourceList {
 func (m *mockNodeInfoProvider) NodeToAllocatableMap() map[string]v1.ResourceList {
 	return map[string]v1.ResourceList{
 		"testNode1": {
-			"pods": *resource.NewQuantity(15, resource.DecimalSI),
+			"pods":           *resource.NewQuantity(15, resource.DecimalSI),
+			"nvidia.com/gpu": *resource.NewQuantity(20, resource.DecimalExponent),
 		},
 		"testNode2": {
 			"pods": *resource.NewQuantity(20, resource.DecimalSI),
 		},
+	}
+}
+
+func (m *mockNodeInfoProvider) NodeToLabelsMap() map[string]map[k8sclient.Label]int8 {
+	return map[string]map[k8sclient.Label]int8{
+		"hyperpod-testNode1": {
+			k8sclient.SageMakerNodeHealthStatus: int8(k8sutil.Schedulable),
+		},
+		"hyperpod-testNode2": {},
 	}
 }
 
