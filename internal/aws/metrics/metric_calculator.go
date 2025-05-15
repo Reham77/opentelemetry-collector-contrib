@@ -7,6 +7,7 @@ import (
 	"errors"
 	"sync"
 	"time"
+	"math/rand"
 
 	"go.opentelemetry.io/otel/attribute"
 )
@@ -47,6 +48,8 @@ type MetricCalculator struct {
 
 // NewMetricCalculator Creates a metric calculator that enforces a five-minute time to live on cache entries.
 func NewMetricCalculator(calculateFunc CalculateFunc) MetricCalculator {
+	jitter := 10 + rand.Float64()*5
+	time.Sleep(time.Duration(jitter) * time.Second)
 	return MetricCalculator{
 		cache:         NewMapWithExpiry(cleanInterval),
 		calculateFunc: calculateFunc,

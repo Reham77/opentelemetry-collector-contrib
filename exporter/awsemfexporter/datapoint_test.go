@@ -558,7 +558,7 @@ func TestCalculateDeltaDatapoints_NumberDataPointSlice(t *testing.T) {
 				numberDatapointSlice := numberDataPointSlice{dmd, numberDPS}
 
 				// When calculate the delta datapoints for number datapoint
-				dps, retained := numberDatapointSlice.CalculateDeltaDatapoints(0, instrLibName, false, emfCalcs)
+				dps, retained := numberDatapointSlice.CalculateDeltaDatapoints(0, instrLibName, false, emfCalcs, )
 
 				assert.Equal(t, 1, numberDatapointSlice.Len())
 				assert.Equal(t, tc.expectedRetained, retained)

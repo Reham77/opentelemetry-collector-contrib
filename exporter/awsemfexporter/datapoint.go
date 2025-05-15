@@ -60,7 +60,7 @@ type dataPoints interface {
 	// dataPoint: the adjusted data point
 	// retained: indicates whether the data point is valid for further process
 	// NOTE: It is an expensive call as it calculates the metric value.
-	CalculateDeltaDatapoints(i int, instrumentationScopeName string, detailedMetrics bool, calculators *emfCalculators) (dataPoint []dataPoint, retained bool)
+	CalculateDeltaDatapoints(i int, instrumentationScopeName string, detailedMetrics bool, calculators *emfCalculators, logger *zap.Logger) (dataPoint []dataPoint, retained bool)
 	// IsStaleNaNInf returns true if metric value has NoRecordedValue flag set or if any metric value contains a NaN or Inf.
 	// When return value is true, IsStaleNaNInf also returns the attributes attached to the metric which can be used for
 	// logging purposes.
@@ -131,7 +131,7 @@ func (split *dataPointSplit) appendMetricData(metricVal float64, count uint64) {
 }
 
 // CalculateDeltaDatapoints retrieves the NumberDataPoint at the given index and performs rate/delta calculation if necessary.
-func (dps numberDataPointSlice) CalculateDeltaDatapoints(i int, _ string, _ bool, calculators *emfCalculators) ([]dataPoint, bool) {
+func (dps numberDataPointSlice) CalculateDeltaDatapoints(i int, _ string, _ bool, calculators *emfCalculators, logger *zap.Logger) ([]dataPoint, bool) {
 	metric := dps.NumberDataPointSlice.At(i)
 	labels := createLabels(metric.Attributes())
 	timestampMs := unixNanoToMilliseconds(metric.Timestamp())
@@ -145,9 +145,9 @@ func (dps numberDataPointSlice) CalculateDeltaDatapoints(i int, _ string, _ bool
 	}
 
 	retained := true
-
+	var deltaVal any
 	if dps.adjustToDelta {
-		var deltaVal any
+		
 		mKey := aws.NewKey(dps.deltaMetricMetadata, labels)
 		deltaVal, retained = calculators.delta.Calculate(mKey, metricVal, metric.Timestamp().AsTime())
 
@@ -167,6 +167,11 @@ func (dps numberDataPointSlice) CalculateDeltaDatapoints(i int, _ string, _ bool
 		}
 	}
 
+	// if (strings.Contains(dps.metricName, "apiserver_request_total") && metricVal > 1000){
+	if (metricVal > 100000 || deltaVal.(float64) < 0) {
+		logger.Warn("metric value is greater than 100000 or 0", zap.String("Metric Name ", dps.metricName), zap.Float64("metric value", metricVal), zap.Bool("retained", retained), zap.Any("deltaValue", deltaVal), zap.Any("Timestamp is ", timestampMs))
+	}
+
 	return []dataPoint{{name: dps.metricName, value: metricVal, labels: labels, timestampMs: timestampMs}}, retained
 }
 
@@ -182,7 +187,7 @@ func (dps numberDataPointSlice) IsStaleNaNInf(i int) (bool, pcommon.Map) {
 }
 
 // CalculateDeltaDatapoints retrieves the HistogramDataPoint at the given index.
-func (dps histogramDataPointSlice) CalculateDeltaDatapoints(i int, _ string, _ bool, calculators *emfCalculators) ([]dataPoint, bool) {
+func (dps histogramDataPointSlice) CalculateDeltaDatapoints(i int, _ string, _ bool, calculators *emfCalculators, logger *zap.Logger) ([]dataPoint, bool) {
 	metric := dps.HistogramDataPointSlice.At(i)
 	labels := createLabels(metric.Attributes())
 	timestamp := unixNanoToMilliseconds(metric.Timestamp())
@@ -245,7 +250,7 @@ func (dps histogramDataPointSlice) IsStaleNaNInf(i int) (bool, pcommon.Map) {
 // - Min and Max values are recalculated based on the bucket boundary within that specific split.
 // - Sum is only assigned to the first split to ensure the total sum of the datapoints after aggregation is correct.
 // - Count is accumulated based on the bucket counts within each split.
-func (dps exponentialHistogramDataPointSlice) CalculateDeltaDatapoints(idx int, _ string, _ bool, _ *emfCalculators) ([]dataPoint, bool) {
+func (dps exponentialHistogramDataPointSlice) CalculateDeltaDatapoints(idx int, _ string, _ bool, _ *emfCalculators, logger *zap.Logger) ([]dataPoint, bool) {
 	metric := dps.ExponentialHistogramDataPointSlice.At(idx)
 
 	const splitThreshold = 100
@@ -449,7 +454,7 @@ func (dps exponentialHistogramDataPointSlice) IsStaleNaNInf(i int) (bool, pcommo
 }
 
 // CalculateDeltaDatapoints retrieves the SummaryDataPoint at the given index and perform calculation with sum and count while retain the quantile value.
-func (dps summaryDataPointSlice) CalculateDeltaDatapoints(i int, _ string, detailedMetrics bool, calculators *emfCalculators) ([]dataPoint, bool) {
+func (dps summaryDataPointSlice) CalculateDeltaDatapoints(i int, _ string, detailedMetrics bool, calculators *emfCalculators, logger *zap.Logger) ([]dataPoint, bool) {
 	metric := dps.SummaryDataPointSlice.At(i)
 	labels := createLabels(metric.Attributes())
 	timestampMs := unixNanoToMilliseconds(metric.Timestamp())
