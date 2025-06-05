@@ -985,6 +985,7 @@ func TestPodStore_decorateNode(t *testing.T) {
 	assert.Equal(t, uint64(1), metric.GetField("node_gpu_request").(uint64))
 	assert.Equal(t, uint64(20), metric.GetField("node_gpu_limit").(uint64))
 	assert.Equal(t, uint64(1), metric.GetField("node_gpu_usage_total").(uint64))
+	assert.Equal(t, uint64(19), metric.GetField("node_gpu_unused_total").(uint64))
 	assert.Equal(t, float64(5), metric.GetField("node_gpu_reserved_capacity").(float64))
 
 	assert.Equal(t, uint64(1), metric.GetField("node_status_condition_ready").(uint64))

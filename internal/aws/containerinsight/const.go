@@ -143,6 +143,7 @@ const (
 
 	GpuLimit            = "gpu_limit"
 	GpuUsageTotal       = "gpu_usage_total"
+	GpuUnusedTotal       = "gpu_unused_total"
 	GpuRequest          = "gpu_request"
 	GpuReservedCapacity = "gpu_reserved_capacity"
 

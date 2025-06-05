@@ -407,6 +407,7 @@ func (p *PodStore) decorateNode(metric CIMetric) {
 				metric.AddField(ci.MetricName(ci.TypeNode, ci.GpuRequest), nodeStats.gpuReq)
 				metric.AddField(ci.MetricName(ci.TypeNode, ci.GpuLimit), nodeStatusCapacityGPUs)
 				metric.AddField(ci.MetricName(ci.TypeNode, ci.GpuUsageTotal), nodeStats.gpuUsageTotal)
+				metric.AddField(ci.MetricName(ci.TypeNode, ci.GpuUnusedTotal), (nodeStatusCapacityGPUs - nodeStats.gpuUsageTotal))
 				metric.AddField(ci.MetricName(ci.TypeNode, ci.GpuReservedCapacity), float64(nodeStats.gpuReq)/float64(nodeStatusCapacityGPUs)*100)
 			}
 		}
